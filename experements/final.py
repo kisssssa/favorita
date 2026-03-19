@@ -9,18 +9,12 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 
-# =========================
-# Ограничение числа ядер
-# =========================
 N_JOBS = min(32, os.cpu_count() or 1)
 os.environ["OMP_NUM_THREADS"] = str(N_JOBS)
 os.environ["MKL_NUM_THREADS"] = str(N_JOBS)
 os.environ["NUMEXPR_NUM_THREADS"] = str(N_JOBS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(N_JOBS)
 
-# =========================
-# Конфиг
-# =========================
 TRAIN_PATH = "train.csv"
 TEST_PATH = "test.csv"
 ITEMS_PATH = "items.csv"
@@ -29,7 +23,6 @@ TRANSACTIONS_PATH = "transactions.csv"
 OIL_PATH = "oil.csv"
 HOLIDAYS_PATH = "holidays_events.csv"
 
-# ВАЖНО: здесь должен быть JSON лучшего RAW-LightGBM прогона
 BEST_PARAMS_PATH = "outputs/lightgbm_best_params.json"
 
 OUTPUT_DIR = Path("outputs_lightgbm_final_submission_fulltrain")
@@ -45,9 +38,6 @@ LAG_COLS = [1, 7, 14, 28]
 ROLLING_WINDOWS = [7, 14, 28]
 RANDOM_STATE = 42
 
-# =========================
-# Признаки
-# =========================
 STATIC_CAT_COLS = [
     "store_nbr",
     "item_nbr",
@@ -79,10 +69,6 @@ DYNAMIC_NUM_COLS = (
 
 FEATURE_COLS = STATIC_CAT_COLS + KNOWN_NUM_COLS + DYNAMIC_NUM_COLS
 
-
-# =========================
-# Утилиты
-# =========================
 def make_unique_id(df: pd.DataFrame) -> pd.Series:
     return df["store_nbr"].astype(str) + "_" + df["item_nbr"].astype(str)
 
@@ -118,10 +104,6 @@ def optimize_memory(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].astype(np.float32)
     return df
 
-
-# =========================
-# Загрузка исходных таблиц
-# =========================
 def load_raw_tables():
     print("Чтение train.csv ...")
     train = pd.read_csv(
@@ -184,10 +166,6 @@ def load_raw_tables():
 
     return train, test, items, stores, transactions, oil, holidays
 
-
-# =========================
-# Единое кодирование категорий
-# =========================
 def build_category_maps(items: pd.DataFrame, stores: pd.DataFrame):
     family_vals = sorted(items["family"].astype(str).fillna("__NA__").unique().tolist())
     city_vals = sorted(stores["city"].astype(str).fillna("__NA__").unique().tolist())
@@ -202,10 +180,6 @@ def build_category_maps(items: pd.DataFrame, stores: pd.DataFrame):
     }
     return maps
 
-
-# =========================
-# Подготовка train/test
-# =========================
 def enrich_df(df: pd.DataFrame,
               items: pd.DataFrame,
               stores: pd.DataFrame,
@@ -239,13 +213,11 @@ def enrich_df(df: pd.DataFrame,
     df["day"] = df["date"].dt.day.astype(np.int8)
     df["is_weekend"] = (df["dayofweek"] >= 5).astype(np.int8)
 
-    # кодируем строковые категории в int32
     df["family"] = df["family"].astype(str).fillna("__NA__").map(cat_maps["family"]).fillna(-1).astype(np.int32)
     df["city"] = df["city"].astype(str).fillna("__NA__").map(cat_maps["city"]).fillna(-1).astype(np.int32)
     df["state"] = df["state"].astype(str).fillna("__NA__").map(cat_maps["state"]).fillna(-1).astype(np.int32)
     df["type"] = df["type"].astype(str).fillna("__NA__").map(cat_maps["type"]).fillna(-1).astype(np.int32)
 
-    # добиваем числовые категориальные
     df["class"] = pd.to_numeric(df["class"], errors="coerce").fillna(-1).astype(np.int32)
     df["perishable"] = pd.to_numeric(df["perishable"], errors="coerce").fillna(0).astype(np.int8)
     df["cluster"] = pd.to_numeric(df["cluster"], errors="coerce").fillna(-1).astype(np.int16)
@@ -253,10 +225,6 @@ def enrich_df(df: pd.DataFrame,
     df = optimize_memory(df)
     return df
 
-
-# =========================
-# История и динамические признаки
-# =========================
 def build_history_dict(history_df: pd.DataFrame) -> Dict[str, List[float]]:
     hist_df = history_df.sort_values(["unique_id", "date"])
     history = (
@@ -329,10 +297,6 @@ def compute_dynamic_features_for_day(day_df: pd.DataFrame, history: Dict[str, Li
     out["rolling_std_7"] = rs_7
     return out
 
-
-# =========================
-# Финальные train features
-# =========================
 def prepare_full_train_features(train_df: pd.DataFrame) -> pd.DataFrame:
     train_df = train_df.sort_values(["unique_id", "date"]).reset_index(drop=True)
 
@@ -356,7 +320,6 @@ def prepare_full_train_features(train_df: pd.DataFrame) -> pd.DataFrame:
     essential_lags = [f"lag_{l}" for l in LAG_COLS]
     train_df = train_df.dropna(subset=essential_lags).reset_index(drop=True)
 
-    # LightGBM умеет в int-коды как обычные признаки, но лучше явно category
     for col in STATIC_CAT_COLS:
         train_df[col] = train_df[col].astype("category")
 
@@ -390,10 +353,6 @@ def fit_lightgbm_full(train_feat: pd.DataFrame, best_params: dict):
     )
     return model
 
-
-# =========================
-# Прогноз на test
-# =========================
 def recursive_predict_test(
     model,
     test_prepared: pd.DataFrame,
@@ -435,10 +394,6 @@ def recursive_predict_test(
     pred_df["unit_sales"] = pred_df["unit_sales"].clip(lower=0).astype(np.float32)
     return pred_df
 
-
-# =========================
-# main
-# =========================
 def main():
     print("N_JOBS =", N_JOBS)
     print("TRAIN_START_DATE =", TRAIN_START_DATE)
@@ -460,12 +415,10 @@ def main():
     print("Построение лагов full train ...")
     full_train_df = prepare_full_train_features(full_train_df)
 
-    # больше train не нужен
     del train, items, stores, transactions, oil, holidays
     gc.collect()
 
     print("Подготовка test ...")
-    # перечитываем справочники отдельно, чтобы не держать всё вместе в памяти во время train feature engineering
     _, _, items2, stores2, transactions2, oil2, holidays2 = load_raw_tables()
     cat_maps2 = build_category_maps(items2, stores2)
 
@@ -489,7 +442,6 @@ def main():
     final_model = fit_lightgbm_full(full_train_df, best_params)
     final_model.booster_.save_model(str(MODEL_PATH))
 
-    # можно освободить train
     del full_train_df
     gc.collect()
 
