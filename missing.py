@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
 
-# =========================
-# Пути
-# =========================
 TRAIN_PATH = "train.csv"
 TEST_PATH = "test.csv"
 ITEMS_PATH = "items.csv"
@@ -12,9 +9,6 @@ TRANSACTIONS_PATH = "transactions.csv"
 OIL_PATH = "oil.csv"
 HOLIDAYS_PATH = "holidays_events.csv"
 
-# =========================
-# Загрузка
-# =========================
 print("Чтение файлов...")
 train = pd.read_csv(
     TRAIN_PATH,
@@ -34,9 +28,6 @@ transactions = pd.read_csv(TRANSACTIONS_PATH, parse_dates=["date"], low_memory=F
 oil = pd.read_csv(OIL_PATH, parse_dates=["date"], low_memory=False)
 holidays = pd.read_csv(HOLIDAYS_PATH, parse_dates=["date"], low_memory=False)
 
-# =========================
-# Общая функция по пропускам
-# =========================
 def missing_report(df: pd.DataFrame, name: str):
     miss = df.isna().sum()
     miss = miss[miss > 0].sort_values(ascending=False)
@@ -55,9 +46,6 @@ def missing_report(df: pd.DataFrame, name: str):
     print(report)
 
 
-# =========================
-# Отчёты по таблицам
-# =========================
 missing_report(train, "train")
 missing_report(test, "test")
 missing_report(items, "items")
@@ -66,16 +54,10 @@ missing_report(transactions, "transactions")
 missing_report(oil, "oil")
 missing_report(holidays, "holidays_events")
 
-# =========================
-# Проверка target
-# =========================
 print("\n==================== TARGET CHECK ====================")
 print("train['unit_sales'] NaN count:", train["unit_sales"].isna().sum())
 print("train['unit_sales'] < 0 count:", (train["unit_sales"] < 0).sum())
 
-# =========================
-# Проверка onpromotion
-# =========================
 print("\n==================== ONPROMOTION CHECK ====================")
 if "onpromotion" in train.columns:
     print("train onpromotion NaN:", train["onpromotion"].isna().sum())
@@ -85,9 +67,6 @@ if "onpromotion" in test.columns:
     print("\ntest onpromotion NaN:", test["onpromotion"].isna().sum())
     print(test["onpromotion"].value_counts(dropna=False))
 
-# =========================
-# Проверка transactions
-# =========================
 print("\n==================== TRANSACTIONS CHECK ====================")
 print("transactions NaN by column:")
 print(transactions.isna().sum())
@@ -95,7 +74,6 @@ print(transactions.isna().sum())
 if "transactions" in transactions.columns:
     print("transactions['transactions'] NaN count:", transactions["transactions"].isna().sum())
 
-# Проверим покрытие store/date
 train_store_date = train[["store_nbr", "date"]].drop_duplicates()
 transactions_store_date = transactions[["store_nbr", "date"]].drop_duplicates()
 
@@ -108,9 +86,6 @@ merged_tx = train_store_date.merge(
 missing_tx_pairs = merged_tx["has_tx"].isna().sum()
 print("Train store/date pairs without transactions match:", missing_tx_pairs)
 
-# =========================
-# Проверка oil
-# =========================
 print("\n==================== OIL CHECK ====================")
 print("oil NaN by column:")
 print(oil.isna().sum())
@@ -119,16 +94,10 @@ oil_dates = pd.DataFrame({"date": pd.date_range(train["date"].min(), train["date
 oil_cov = oil_dates.merge(oil.assign(has_oil=1), on="date", how="left")
 print("Dates in train range without oil row:", oil_cov["has_oil"].isna().sum())
 
-# =========================
-# Проверка праздников
-# =========================
 print("\n==================== HOLIDAYS CHECK ====================")
 print("holidays NaN by column:")
 print(holidays.isna().sum())
 
-# =========================
-# Проверка пропусков дат внутри временных рядов
-# =========================
 print("\n==================== SERIES GAP CHECK ====================")
 
 train = train.sort_values(["store_nbr", "item_nbr", "date"]).copy()
@@ -163,15 +132,9 @@ print(
     .to_string(index=False)
 )
 
-# =========================
-# Сводка по "дыркам" внутри рядов
-# =========================
 print("\n==================== GAP SUMMARY ====================")
 print(series_span["missing_inside_span"].describe())
 
-# =========================
-# Сколько рядов начинаются поздно
-# =========================
 print("\n==================== LATE START CHECK ====================")
 global_min_date = train["date"].min()
 series_span["days_after_global_start"] = (series_span["first_date"] - global_min_date).dt.days
@@ -185,9 +148,6 @@ print(
     .to_string(index=False)
 )
 
-# =========================
-# Проверка полноты test-рядов относительно train
-# =========================
 print("\n==================== TEST VS TRAIN SERIES ====================")
 test["unique_id"] = test["store_nbr"].astype(str) + "_" + test["item_nbr"].astype(str)
 
