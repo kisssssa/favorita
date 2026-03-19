@@ -20,4 +20,11 @@
 - кользящее стандартное отклонение: rolling_std_7
 
 Модели:
-- baseline.py — статистические baseline-модели (Naive, SeasonalNaive, AutoTheta, AutoETS)
+- baseline.py - статистические baseline-модели (Naive, SeasonalNaive, AutoTheta, AutoETS)
+- boosting.py - LightGBM, CatBoost
+- boosting_new_featch.py - Это LightGBM-версия, где к базовым лагам и средним добавлены новые TS-признаки: rolling_max_7 - максимум продаж за последние 7 дней; rolling_min_7 - минимум за последние 7 дней; promo_sum_7 - сколько промо-дней было за последние 7 дней; days_since_last_nonzero_sale - сколько дней прошло с последней ненулевой продажи.
+- boosting_weakly.py - отдельная модель LightGBM на каждый день недели
+- boosting_without_hol.py - без признаков dcoilwtico, is_holiday_event
+- clusster.py — LightGBM + кластер ряда как дополнительный признак. Для каждого временного ряда берётся история длиной 180 дней. На ней обучается автоэнкодер SeriesAutoencoder. И уже латентное представление класстеризируется. Дальше признак класстер добавляется в признаки LightGBM.
+- lightgbm_filled_missing.py - LightGBM на заполненных активных периодах. Заполняются пропущенные даты внутри активного периода продаж нулями.
+- final.py - Здесь используется финальная LightGBM для прогноза на test.csv.
