@@ -9,18 +9,12 @@ import pandas as pd
 import optuna
 import lightgbm as lgb
 
-# =========================
-# Ограничение числа ядер
-# =========================
 N_JOBS = min(32, os.cpu_count() or 1)
 os.environ["OMP_NUM_THREADS"] = str(N_JOBS)
 os.environ["MKL_NUM_THREADS"] = str(N_JOBS)
 os.environ["NUMEXPR_NUM_THREADS"] = str(N_JOBS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(N_JOBS)
 
-# =========================
-# Конфиг
-# =========================
 TRAIN_PATH = "train.csv"
 ITEMS_PATH = "items.csv"
 STORES_PATH = "stores.csv"
@@ -50,9 +44,6 @@ ROLLING_WINDOWS = [7, 14, 28]
 
 SKIP_DONE_MODELS = True
 
-# =========================
-# Пути артефактов
-# =========================
 TRAIN_FEAT_PATH = CACHE_DIR / "train_features.parquet"
 VALID_KNOWN_PATH = CACHE_DIR / "valid_known.parquet"
 VALID_TRUTH_PATH = CACHE_DIR / "valid_truth.parquet"
@@ -69,9 +60,6 @@ LGBM_BEST_PARAMS_PATH = OUTPUT_DIR / "lightgbm_best_params.json"
 LGBM_METRICS_PATH = OUTPUT_DIR / "lightgbm_metrics_h28.json"
 LGBM_PRED_PATH = OUTPUT_DIR / "lightgbm_valid_predictions_h28.csv"
 
-# =========================
-# Признаки
-# =========================
 STATIC_CAT_COLS = [
     "store_nbr",
     "item_nbr",
@@ -84,8 +72,6 @@ STATIC_CAT_COLS = [
     "cluster",
 ]
 
-# dayofweek тут НЕ используем как фичу,
-# потому что у нас отдельная модель под каждый день недели
 KNOWN_NUM_COLS = [
     "onpromotion",
     "transactions",
@@ -104,9 +90,6 @@ DYNAMIC_NUM_COLS = (
 
 FEATURE_COLS = STATIC_CAT_COLS + KNOWN_NUM_COLS + DYNAMIC_NUM_COLS
 
-# =========================
-# Метрики
-# =========================
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.clip(np.asarray(y_true, dtype=float), 0, None)
     y_pred = np.clip(np.asarray(y_pred, dtype=float), 0, None)
@@ -129,10 +112,6 @@ def wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         return np.nan
     return float(np.sum(np.abs(y_true - y_pred)) / denom)
 
-
-# =========================
-# Утилиты
-# =========================
 def make_unique_id(df: pd.DataFrame) -> pd.Series:
     return df["store_nbr"].astype(str) + "_" + df["item_nbr"].astype(str)
 
@@ -163,9 +142,6 @@ def count_completed_trials(study: optuna.Study) -> int:
     return sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
 
 
-# =========================
-# Подготовка данных
-# =========================
 def read_train_chunked() -> pd.DataFrame:
     usecols = ["date", "store_nbr", "item_nbr", "unit_sales", "onpromotion"]
     chunks = []
@@ -298,9 +274,6 @@ def load_and_prepare_features(force_rebuild: bool = False):
     return train_feat, valid_known, valid_truth, history_prevalid, meta
 
 
-# =========================
-# Подготовка наборов
-# =========================
 def sample_uids_for_tuning(train_feat: pd.DataFrame, valid_known: pd.DataFrame, sample_size: int) -> list[str]:
     all_uids = np.intersect1d(train_feat["unique_id"].unique(), valid_known["unique_id"].unique())
     if sample_size is None or sample_size >= len(all_uids):
@@ -485,9 +458,6 @@ def recursive_predict_valid_weekday(
     return eval_df, metrics
 
 
-# =========================
-# Optuna objective
-# =========================
 def make_lgbm_weekday_objective(train_feat, valid_known, valid_truth, history_prevalid, meta):
     tuning_uids = set(sample_uids_for_tuning(train_feat, valid_known, TUNING_UID_SAMPLE_LGBM))
     inner_eval_start = meta["inner_eval_start"]
@@ -528,9 +498,6 @@ def make_lgbm_weekday_objective(train_feat, valid_known, valid_truth, history_pr
     return objective
 
 
-# =========================
-# Запуск weekday-LightGBM
-# =========================
 def run_lightgbm_weekday(train_feat, valid_known, valid_truth, history_prevalid, meta):
     if SKIP_DONE_MODELS and LGBM_DONE_FLAG.exists():
         print("LightGBM уже завершён. Скипаем.")
@@ -581,9 +548,6 @@ def run_lightgbm_weekday(train_feat, valid_known, valid_truth, history_prevalid,
     LGBM_DONE_FLAG.touch()
 
 
-# =========================
-# main
-# =========================
 def main():
     print(f"N_JOBS = {N_JOBS}")
     print(f"TRAIN_START_DATE = {TRAIN_START_DATE}")
