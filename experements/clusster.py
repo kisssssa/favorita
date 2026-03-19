@@ -1,8 +1,5 @@
 import os
 
-# =========================
-# ЖЁСТКОЕ ограничение потоков
-# =========================
 SAFE_THREADS = "8"
 os.environ["OMP_NUM_THREADS"] = SAFE_THREADS
 os.environ["MKL_NUM_THREADS"] = SAFE_THREADS
@@ -28,15 +25,9 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.cluster import MiniBatchKMeans
 from scipy.cluster.hierarchy import linkage, fcluster
 
-# =========================
-# Ограничение числа ядер
-# =========================
 N_JOBS = min(8, os.cpu_count() or 1)
 torch.set_num_threads(4)
 
-# =========================
-# Конфиг
-# =========================
 TRAIN_PATH = "train.csv"
 ITEMS_PATH = "items.csv"
 STORES_PATH = "stores.csv"
@@ -64,24 +55,17 @@ RANDOM_STATE = 42
 LAG_COLS = [1, 7, 14, 28]
 ROLLING_WINDOWS = [7, 14, 28]
 
-# -------------------------
-# Параметры AE + clustering
-# -------------------------
 SERIES_HISTORY_DAYS = 180
 LATENT_DIM = 16
 AE_EPOCHS = 20
 AE_BATCH_SIZE = 4096
 AE_LR = 1e-3
 
-# Уменьшено для устойчивости
 N_PROTOTYPES = 1000
 N_SERIES_CLUSTERS = 5
 
 SKIP_DONE_MODELS = True
 
-# =========================
-# Пути артефактов
-# =========================
 TRAIN_FEAT_PATH = CACHE_DIR / "train_features.parquet"
 VALID_KNOWN_PATH = CACHE_DIR / "valid_known.parquet"
 VALID_TRUTH_PATH = CACHE_DIR / "valid_truth.parquet"
@@ -104,9 +88,6 @@ LGBM_BEST_PARAMS_PATH = OUTPUT_DIR / "lightgbm_best_params.json"
 LGBM_METRICS_PATH = OUTPUT_DIR / "lightgbm_metrics_h28.json"
 LGBM_PRED_PATH = OUTPUT_DIR / "lightgbm_valid_predictions_h28.csv"
 
-# =========================
-# Признаки
-# =========================
 STATIC_CAT_COLS = [
     "store_nbr",
     "item_nbr",
@@ -139,10 +120,6 @@ DYNAMIC_NUM_COLS = (
 
 FEATURE_COLS = STATIC_CAT_COLS + KNOWN_NUM_COLS + DYNAMIC_NUM_COLS
 
-
-# =========================
-# Метрики
-# =========================
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.clip(np.asarray(y_true, dtype=float), 0, None)
     y_pred = np.clip(np.asarray(y_pred, dtype=float), 0, None)
@@ -165,10 +142,6 @@ def wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         return np.nan
     return float(np.sum(np.abs(y_true - y_pred)) / denom)
 
-
-# =========================
-# Утилиты
-# =========================
 def make_unique_id(df: pd.DataFrame) -> pd.Series:
     return df["store_nbr"].astype(str) + "_" + df["item_nbr"].astype(str)
 
@@ -199,9 +172,6 @@ def count_completed_trials(study: optuna.Study) -> int:
     return sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
 
 
-# =========================
-# Подготовка данных
-# =========================
 def read_train_chunked() -> pd.DataFrame:
     usecols = ["date", "store_nbr", "item_nbr", "unit_sales", "onpromotion"]
     chunks = []
@@ -335,9 +305,6 @@ def load_and_prepare_base_features(force_rebuild: bool = False):
     return train_feat, valid_known, valid_truth, history_prevalid, meta
 
 
-# =========================
-# Autoencoder
-# =========================
 class SeriesAutoencoder(nn.Module):
     def __init__(self, input_dim: int, latent_dim: int):
         super().__init__()
@@ -512,9 +479,6 @@ def attach_series_cluster(
     return train_feat_c, valid_known_c, history_prevalid_c
 
 
-# =========================
-# LightGBM pipeline
-# =========================
 def sample_uids_for_tuning(train_feat: pd.DataFrame, valid_known: pd.DataFrame, sample_size: int) -> list[str]:
     all_uids = np.intersect1d(train_feat["unique_id"].unique(), valid_known["unique_id"].unique())
     if sample_size is None or sample_size >= len(all_uids):
@@ -685,9 +649,6 @@ def fit_lightgbm(fit_df: pd.DataFrame, eval_df: pd.DataFrame, params: dict):
     return model
 
 
-# =========================
-# Optuna objective
-# =========================
 def make_lgbm_objective(train_feat, valid_known, valid_truth, history_prevalid, meta):
     tuning_uids = set(sample_uids_for_tuning(train_feat, valid_known, TUNING_UID_SAMPLE_LGBM))
     inner_eval_start = meta["inner_eval_start"]
@@ -723,9 +684,6 @@ def make_lgbm_objective(train_feat, valid_known, valid_truth, history_prevalid, 
     return objective
 
 
-# =========================
-# Запуск LightGBM
-# =========================
 def run_lightgbm(train_feat, valid_known, valid_truth, history_prevalid, meta):
     if SKIP_DONE_MODELS and LGBM_DONE_FLAG.exists():
         print("LightGBM уже завершён. Скипаем.")
@@ -769,9 +727,6 @@ def run_lightgbm(train_feat, valid_known, valid_truth, history_prevalid, meta):
     LGBM_DONE_FLAG.touch()
 
 
-# =========================
-# main
-# =========================
 def main():
     print(f"N_JOBS = {N_JOBS}")
     print(f"TRAIN_START_DATE = {TRAIN_START_DATE}")
