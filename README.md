@@ -7,3 +7,5 @@
 missing.py - поиск пропусков
 
 missing fill - заполнение пропусков
+
+experements - все модели
