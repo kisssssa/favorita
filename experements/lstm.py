@@ -11,9 +11,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-# =========================
-# Ограничение потоков CPU
-# =========================
+
 N_JOBS = min(6, os.cpu_count() or 1)
 os.environ["OMP_NUM_THREADS"] = str(N_JOBS)
 os.environ["MKL_NUM_THREADS"] = str(N_JOBS)
@@ -22,9 +20,6 @@ os.environ["OPENBLAS_NUM_THREADS"] = str(N_JOBS)
 
 torch.set_num_threads(N_JOBS)
 
-# =========================
-# Конфиг
-# =========================
 TRAIN_PATH = "train.csv"
 ITEMS_PATH = "items.csv"
 STORES_PATH = "stores.csv"
@@ -38,7 +33,6 @@ CACHE_DIR = OUTPUT_DIR / "cache"
 OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
 CACHE_DIR.mkdir(exist_ok=True, parents=True)
 
-# Берём не всю историю, а более компактный хвост
 TRAIN_START_DATE = "2016-01-01"
 
 HORIZON = 28
@@ -56,9 +50,6 @@ DROPOUT = 0.10
 RANDOM_STATE = 42
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# =========================
-# Пути
-# =========================
 TRAIN_FEAT_PATH = CACHE_DIR / "train_feat.parquet"
 VALID_KNOWN_PATH = CACHE_DIR / "valid_known.parquet"
 VALID_TRUTH_PATH = CACHE_DIR / "valid_truth.parquet"
@@ -80,9 +71,6 @@ MODEL_PATH = OUTPUT_DIR / "lstm_model.pt"
 METRICS_PATH = OUTPUT_DIR / "lstm_metrics_h28.json"
 PRED_PATH = OUTPUT_DIR / "lstm_valid_predictions_h28.csv"
 
-# =========================
-# Признаки
-# =========================
 CAT_COLS = [
     "store_nbr",
     "item_nbr",
@@ -106,9 +94,6 @@ NUM_COLS = [
     "is_weekend",
 ]
 
-# =========================
-# Utils
-# =========================
 def seed_everything(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -136,9 +121,6 @@ def safe_clip_forecast(pred: np.ndarray) -> np.ndarray:
 def inverse_log_target(pred_log: np.ndarray) -> np.ndarray:
     return safe_clip_forecast(np.expm1(pred_log))
 
-# =========================
-# Метрики
-# =========================
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.clip(np.asarray(y_true, dtype=float), 0, None)
     y_pred = np.clip(np.asarray(y_pred, dtype=float), 0, None)
@@ -159,9 +141,6 @@ def wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         return np.nan
     return float(np.sum(np.abs(y_true - y_pred)) / denom)
 
-# =========================
-# Dataset
-# =========================
 class SeqDataset(Dataset):
     def __init__(self, seqs, nums, cats, y):
         self.seqs = seqs
@@ -180,9 +159,6 @@ class SeqDataset(Dataset):
             torch.tensor(self.y[idx], dtype=torch.float32),
         )
 
-# =========================
-# Модель
-# =========================
 class GlobalLSTM(nn.Module):
     def __init__(self, cat_cardinalities: List[int], num_numeric: int):
         super().__init__()
@@ -224,9 +200,6 @@ class GlobalLSTM(nn.Module):
         out = self.mlp(x).squeeze(1)
         return out
 
-# =========================
-# Подготовка данных
-# =========================
 def build_and_cache_data(force_rebuild: bool = False):
     if (
         not force_rebuild
@@ -290,7 +263,6 @@ def build_and_cache_data(force_rebuild: bool = False):
         transactions["transactions"], errors="coerce"
     ).fillna(0).astype("float32")
 
-    # ужимаем справочники
     for col in ["family"]:
         items[col] = items[col].astype("category")
     items["class"] = pd.to_numeric(items["class"], errors="coerce").fillna(-1).astype("int32")
@@ -355,7 +327,6 @@ def build_and_cache_data(force_rebuild: bool = False):
     valid_truth["weight"] = np.where(valid_truth["perishable"] == 1, 1.25, 1.0).astype("float32")
     valid_truth = valid_truth[["unique_id", "date", "item_nbr", "y_true", "weight"]].copy()
 
-    # vocab и кодирование категорий
     vocab = {}
     for col in CAT_COLS:
         vals = train_feat[col].astype(str).fillna("__NA__").unique().tolist()
@@ -364,7 +335,6 @@ def build_and_cache_data(force_rebuild: bool = False):
         train_feat[col] = train_feat[col].astype(str).map(mapping).fillna(0).astype("int32")
         valid_known[col] = valid_known[col].astype(str).map(mapping).fillna(0).astype("int32")
 
-    # финальное ужатие
     for col in NUM_COLS:
         train_feat[col] = train_feat[col].astype("float32")
         valid_known[col] = valid_known[col].astype("float32")
@@ -388,9 +358,6 @@ def build_and_cache_data(force_rebuild: bool = False):
 
     return train_feat, valid_known, valid_truth, history_prevalid, meta, vocab
 
-# =========================
-# Построение sample arrays
-# =========================
 def build_samples(df: pd.DataFrame, min_seq_len: int = 28):
     seqs, nums, cats, ys = [], [], [], []
 
@@ -463,9 +430,6 @@ def build_or_load_sample_arrays(train_feat: pd.DataFrame, meta: dict):
 
     return tr_seq, tr_num, tr_cat, tr_y, va_seq, va_num, va_cat, va_y
 
-# =========================
-# Обучение
-# =========================
 def train_model(train_ds: Dataset, val_ds: Dataset, cat_cardinalities: List[int]):
     pin_memory = DEVICE == "cuda"
 
@@ -553,9 +517,6 @@ def train_model(train_ds: Dataset, val_ds: Dataset, cat_cardinalities: List[int]
     model.load_state_dict(best_state)
     return model
 
-# =========================
-# Рекурсивный прогноз
-# =========================
 def build_history_dict(history_prevalid: pd.DataFrame):
     return (
         history_prevalid.sort_values(["unique_id", "date"])
@@ -624,9 +585,6 @@ def recursive_predict_valid(model, valid_known, valid_truth):
     }
     return eval_df, metrics
 
-# =========================
-# main
-# =========================
 def main():
     seed_everything(RANDOM_STATE)
 
