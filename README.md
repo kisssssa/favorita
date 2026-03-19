@@ -3,3 +3,5 @@
 - transactions полезен, но заметно слабее лаговых и rolling-признаков.
 - onpromotion даёт сигнал, но умеренный.
 - dcoilwtico и is_holiday_event по одиночной корреляции выглядят очень слабыми.
+missing.py - поиск пропусков
+missing fill - заполнение пропусков
