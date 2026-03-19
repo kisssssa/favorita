@@ -18,5 +18,6 @@
 - лаги: lag_1, lag_7, lag_14, lag_28
 - скользящие средние: rolling_mean_7, rolling_mean_14, rolling_mean_28
 - кользящее стандартное отклонение: rolling_std_7
+
 Модели:
 - baseline.py — статистические baseline-модели (Naive, SeasonalNaive, AutoTheta, AutoETS)
