@@ -9,18 +9,13 @@ import pandas as pd
 import optuna
 import lightgbm as lgb
 
-# =========================
-# Ограничение числа ядер
-# =========================
 N_JOBS = min(32, os.cpu_count() or 1)
 os.environ["OMP_NUM_THREADS"] = str(N_JOBS)
 os.environ["MKL_NUM_THREADS"] = str(N_JOBS)
 os.environ["NUMEXPR_NUM_THREADS"] = str(N_JOBS)
 os.environ["OPENBLAS_NUM_THREADS"] = str(N_JOBS)
 
-# =========================
-# Конфиг
-# =========================
+
 TRAIN_PATH = "train.csv"
 ITEMS_PATH = "items.csv"
 STORES_PATH = "stores.csv"
@@ -50,9 +45,6 @@ ROLLING_WINDOWS = [7, 14, 28]
 
 SKIP_DONE_MODELS = True
 
-# =========================
-# Пути артефактов
-# =========================
 TRAIN_FEAT_PATH = CACHE_DIR / "train_features.parquet"
 VALID_KNOWN_PATH = CACHE_DIR / "valid_known.parquet"
 VALID_TRUTH_PATH = CACHE_DIR / "valid_truth.parquet"
@@ -67,9 +59,6 @@ LGBM_BEST_PARAMS_PATH = OUTPUT_DIR / "lightgbm_best_params.json"
 LGBM_METRICS_PATH = OUTPUT_DIR / "lightgbm_metrics_h28.json"
 LGBM_PRED_PATH = OUTPUT_DIR / "lightgbm_valid_predictions_h28.csv"
 
-# =========================
-# Признаки
-# =========================
 STATIC_CAT_COLS = [
     "store_nbr",
     "item_nbr",
@@ -110,9 +99,6 @@ DYNAMIC_NUM_COLS = BASE_DYNAMIC_NUM_COLS + NEW_TS_FEATURES
 
 FEATURE_COLS = STATIC_CAT_COLS + KNOWN_NUM_COLS + DYNAMIC_NUM_COLS
 
-# =========================
-# Метрики
-# =========================
 def rmsle(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     y_true = np.clip(np.asarray(y_true, dtype=float), 0, None)
     y_pred = np.clip(np.asarray(y_pred, dtype=float), 0, None)
@@ -136,9 +122,6 @@ def wape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.sum(np.abs(y_true - y_pred)) / denom)
 
 
-# =========================
-# Утилиты
-# =========================
 def make_unique_id(df: pd.DataFrame) -> pd.Series:
     return df["store_nbr"].astype(str) + "_" + df["item_nbr"].astype(str)
 
@@ -169,9 +152,6 @@ def count_completed_trials(study: optuna.Study) -> int:
     return sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
 
 
-# =========================
-# Подготовка данных
-# =========================
 def read_train_chunked() -> pd.DataFrame:
     usecols = ["date", "store_nbr", "item_nbr", "unit_sales", "onpromotion"]
     chunks = []
@@ -198,7 +178,6 @@ def compute_days_since_last_nonzero(group: pd.DataFrame) -> pd.Series:
     last_nonzero_idx = -1
 
     for i, val in enumerate(values):
-        # Признак должен смотреть только в прошлое
         if last_nonzero_idx == -1:
             result[i] = np.nan
         else:
@@ -283,7 +262,6 @@ def load_and_prepare_features(force_rebuild: bool = False):
     )
     df["rolling_std_7"] = df["rolling_std_7"].fillna(0).astype("float32")
 
-    # Новые признаки
     df["rolling_max_7"] = (
         grp_sales.transform(lambda s: s.shift(1).rolling(7, min_periods=1).max())
         .astype("float32")
@@ -349,10 +327,6 @@ def load_and_prepare_features(force_rebuild: bool = False):
 
     return train_feat, valid_known, valid_truth, history_prevalid, meta
 
-
-# =========================
-# Подготовка наборов
-# =========================
 def sample_uids_for_tuning(train_feat: pd.DataFrame, valid_known: pd.DataFrame, sample_size: int) -> list[str]:
     all_uids = np.intersect1d(train_feat["unique_id"].unique(), valid_known["unique_id"].unique())
     if sample_size is None or sample_size >= len(all_uids):
@@ -479,14 +453,6 @@ def compute_dynamic_features_for_day(day_df: pd.DataFrame, history: Dict[str, li
     out["rolling_min_7"] = rmin_7
     out["days_since_last_nonzero_sale"] = days_since
 
-    # promo_sum_7 для будущего дня известен из истории промо,
-    # но у нас в рекурсивной схеме валид_known уже содержит только текущий onpromotion.
-    # Для простоты и честного первого прогона считаем promo_sum_7 оффлайн в train,
-    # а на valid восстанавливаем через историю onpromotion не делаем.
-    # Используем приближение через текущее onpromotion и отсутствие прошлой promo-history на этапе рекурсии.
-    # Чтобы не вносить кривую логику, задаём 0 и смотрим, даст ли прирост остальная тройка + promo_sum_7 в train.
-    out["promo_sum_7"] = 0.0
-
     return out
 
 
@@ -562,10 +528,6 @@ def fit_lightgbm(fit_df: pd.DataFrame, eval_df: pd.DataFrame, params: dict):
     )
     return model
 
-
-# =========================
-# Optuna objective
-# =========================
 def make_lgbm_objective(train_feat, valid_known, valid_truth, history_prevalid, meta):
     tuning_uids = set(sample_uids_for_tuning(train_feat, valid_known, TUNING_UID_SAMPLE_LGBM))
     inner_eval_start = meta["inner_eval_start"]
@@ -601,9 +563,6 @@ def make_lgbm_objective(train_feat, valid_known, valid_truth, history_prevalid, 
     return objective
 
 
-# =========================
-# Запуск LightGBM
-# =========================
 def run_lightgbm(train_feat, valid_known, valid_truth, history_prevalid, meta):
     if SKIP_DONE_MODELS and LGBM_DONE_FLAG.exists():
         print("LightGBM уже завершён. Скипаем.")
@@ -646,10 +605,6 @@ def run_lightgbm(train_feat, valid_known, valid_truth, history_prevalid, meta):
     print("LightGBM metrics:", metrics)
     LGBM_DONE_FLAG.touch()
 
-
-# =========================
-# main
-# =========================
 def main():
     print(f"N_JOBS = {N_JOBS}")
     print(f"TRAIN_START_DATE = {TRAIN_START_DATE}")
